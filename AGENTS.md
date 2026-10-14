@@ -53,8 +53,17 @@ The WSL2 kernel has WireGuard and nf_tables, so `wg0` and the firewall come up f
 - Comments explain **why**, not what. Match the density of the surrounding code.
 - `gofmt`; no dependencies outside the standard library.
 - `.ps1` and `.cmd` are CRLF (`.gitattributes` enforces it); everything else LF.
-- Commits follow [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `refactor:`, `docs:`, `ci:`, `chore:`, with an optional scope (`feat(server): ...`). No emoji.
+- Commits follow [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `refactor:`, `docs:`, `ci:`, `chore:`, with an optional scope (`feat(server): ...`). No emoji. PR titles follow the same format: a squash merge turns the title into the commit message.
 - No secrets or deployment details in the repo: server address, keys and peer names live in `.env` (gitignored) and on the server.
+
+## Workflow
+
+`main` is protected by repository rulesets, for everyone including the owner:
+
+- No direct pushes: work on a branch and open a pull request. The `windows` and `lint` checks must pass and the branch must be up to date with `main`. No approval is required (single maintainer).
+- Merges are squash or rebase only; history stays linear, and the branch is deleted after the merge.
+- No force pushes and no deleting `main`, with no bypass. Rewriting history means turning the `main: integrity` ruleset off and back on, which is the owner's call.
+- Tags matching `v*` cannot be deleted or moved once pushed: `scripts/build.sh` takes the version from `git describe`, and a moved tag would change what an already distributed executable claims to be.
 
 ## Invariants
 
