@@ -52,6 +52,7 @@ cp servidor/golive.nft /etc/wireguard/
 sed "s|<gerada no servidor>|$(cat servidor.chave)|" servidor/wg0.conf.exemplo > /etc/wireguard/wg0.conf
 cp servidor/90-golive-wg.conf /etc/sysctl.d/ && sysctl --system
 install -m 700 servidor/golive-peer /usr/local/sbin/golive-peer
+install -m 755 servidor/golive-liberador /usr/local/sbin/golive-liberador
 systemctl enable --now wg-quick@wg0
 ```
 
@@ -71,21 +72,34 @@ cp .env.example .env    # preencha o endereço e a chave pública do servidor
 ./compilar-amigos.sh
 ```
 
-O pacote sai em `dist/DiscordGoLiveBypass-amigos-AAAA-MM-DD.zip`, com o executável, o [`COMO-USAR.txt`](COMO-USAR.txt), o `SHA256SUMS.txt` e a licença. Mande o SHA256 do executável por uma mensagem separada do zip. O build é reproduzível: o mesmo código e o mesmo `.env` dão o mesmo SHA256.
+O pacote sai em `dist/DiscordGoLiveBypass-amigos-AAAA-MM-DD.zip`, com o executável, o [`COMO-USAR.txt`](COMO-USAR.txt), o `SHA256SUMS.txt` e a licença. Ao lado sai o `dist/Liberador-*.zip`, só para quem for liberador. Mande o SHA256 do executável por uma mensagem separada do zip. O build é reproduzível (`-trimpath -buildvcs=false`): o mesmo código e o mesmo `.env` dão o mesmo SHA256.
 
 Sem as variáveis do `.env` (um `go build` comum), o executável não tem túnel embutido e funciona como o original, mas esse modo não devolve mais o Go Live.
 
 ## Liberar e cortar amigos
 
-O `Liberar-amigo.ps1` roda no Windows de quem cuida do servidor e entra pelo apelido `vps` do `~/.ssh/config`, como root e com chave:
+O `Liberar-amigo.cmd` roda no Windows de quem cuida do servidor, no PowerShell ou no Prompt de Comando, e entra pelo apelido `vps` do `~/.ssh/config`, como root e com chave:
 
 ```
-.\Liberar-amigo.ps1 -Nome joao -Chave 'golive-wg AAAA...='
-.\Liberar-amigo.ps1 -Listar
-.\Liberar-amigo.ps1 -Remover joao
+.\Liberar-amigo.cmd -Nome joao -Chave 'golive-wg AAAA...='
+.\Liberar-amigo.cmd -Listar
+.\Liberar-amigo.cmd -Remover joao
 ```
 
-A linha que o amigo manda é validada aqui e de novo no servidor, porque termina numa linha de comando do root. O `-Listar` mostra o último contato de cada um.
+O `.cmd` só chama o `.ps1` com a política de scripts liberada para aquela execução: o Windows, por padrão, recusa `.ps1` digitado direto. A linha que o amigo manda é validada aqui e de novo no servidor, porque termina numa linha de comando do root. O `-Listar` mostra quem liberou cada um e o último contato.
+
+### Liberadores
+
+Um liberador é um amigo que libera outros sozinho, sem acesso ao servidor: ele libera até o limite dele, vê a lista inteira e só corta quem ele mesmo liberou.
+
+1. Mande para ele o `dist/Liberador-*.zip`. O `compilar-amigos.sh` gera o kit com o endereço e a identidade SSH do servidor tirados do `.env`.
+2. Ele roda `.\Liberar-pessoal.cmd` uma vez. O script gera a chave dele e mostra uma linha `golive-liberador ssh-ed25519 ...`, que ele te manda.
+3. Você dá a permissão: `.\Liberar-amigo.cmd -Liberador maria -Chave 'golive-liberador ssh-ed25519 ...' -Limite 20`.
+4. Daí em diante ele usa `.\Liberar-pessoal.cmd -Nome`, `-Listar` e `-Remover` como você.
+
+Você acompanha com `-Liberadores` e tira a permissão com `-TirarLiberador maria`. Quem ele liberou continua com acesso até você cortar.
+
+No servidor, todos os liberadores entram pelo usuário `liberador`, sem senha. Cada chave tem no `authorized_keys` um comando forçado, `golive-liberador <nome>`: o SSH ignora o que for pedido e só roda esse script, então quem conecta não escolhe quem é. O script aceita só `add`, `remove` e `list`, com palavras simples, registra o pedido no log (`journalctl -t golive-liberador`) e chama `sudo golive-peer como <nome>`, a única coisa que o `sudo` permite a esse usuário. A chave tem `restrict`, então não abre terminal nem encaminha porta.
 
 ## Problemas comuns
 
@@ -134,9 +148,10 @@ Outro programa, ou um `wiresock-client run` aberto à mão, está usando o WireS
 | `source.go` | modo original: lista pública, Tor, cache |
 | `discord.go` | detecção da instalação, instância única, abertura |
 | `ui.go`, `console*.go` | etapas, caixas, cores e o comportamento da janela no duplo clique |
-| `servidor/` | WireGuard, firewall, `golive-peer` e endurecimento do VPS |
+| `servidor/` | WireGuard, firewall, `golive-peer`, `golive-liberador` e endurecimento do VPS |
 | `compilar-amigos.sh` | build com o servidor do `.env` e montagem do pacote |
-| `Liberar-amigo.ps1` | liberar, listar e cortar amigos pelo SSH |
+| `Liberar-amigo.cmd` / `.ps1` | dono: liberar, listar e cortar amigos e liberadores, como root pelo SSH |
+| `Liberar-pessoal.cmd` / `.ps1` | liberador: liberar, listar e cortar com a permissão que o dono deu (modelo; a versão pronta sai em `dist/`) |
 | `COMO-USAR.txt` | guia que vai no pacote dos amigos |
 
 ## Licença

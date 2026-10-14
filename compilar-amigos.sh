@@ -13,6 +13,8 @@ source .env
     { echo "GOLIVE_SERVIDOR invalido no .env: use host:porta" >&2; exit 1; }
 [[ "${GOLIVE_CHAVE_SERVIDOR:-}" =~ ^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$ ]] ||
     { echo "GOLIVE_CHAVE_SERVIDOR invalida no .env: e a saida de wg show wg0 public-key" >&2; exit 1; }
+[[ "${GOLIVE_SSH_IDENTIDADE:-}" =~ ^ssh-ed25519\ AAAAC3NzaC1lZDI1NTE5[A-Za-z0-9+/]{48}$ ]] ||
+    { echo "GOLIVE_SSH_IDENTIDADE invalida no .env: e o ssh_host_ed25519_key.pub do VPS, sem o comentario" >&2; exit 1; }
 
 versao="amigos-$(date +%Y-%m-%d)"
 pacote="dist/DiscordGoLiveBypass"
@@ -29,8 +31,9 @@ fi
 
 rm -rf dist
 mkdir -p "$pacote"
-# -trimpath deixa o build reproduzivel: o mesmo codigo e o mesmo .env dao o mesmo SHA256.
-GOOS=windows GOARCH=amd64 go build -trimpath \
+# -trimpath e -buildvcs=false deixam o build reproduzivel: o mesmo codigo e o mesmo .env dao
+# o mesmo SHA256, com ou sem mudanca pendente no git.
+GOOS=windows GOARCH=amd64 go build -trimpath -buildvcs=false \
     -ldflags "-X main.version=$versao -X main.tunelServidor=$GOLIVE_SERVIDOR -X main.tunelChaveServidor=$GOLIVE_CHAVE_SERVIDOR" \
     -o "$pacote/DiscordGoLiveBypass.exe" .
 
@@ -40,7 +43,16 @@ cp LICENSE "$pacote/"
 (cd "$pacote" && sha256sum DiscordGoLiveBypass.exe | sed 's/$/\r/' > SHA256SUMS.txt)
 (cd dist && python3 -I -m zipfile -c "DiscordGoLiveBypass-$versao.zip" DiscordGoLiveBypass)
 
+# Script de quem libera amigos sozinho: so vai para os liberadores, nao no zip de todo mundo.
+host=${GOLIVE_SERVIDOR%:*}
+mkdir -p dist/Liberador
+sed -e "s|__SERVIDOR__|$host|" -e "s|__IDENTIDADE__|$GOLIVE_SSH_IDENTIDADE|" Liberar-pessoal.ps1 |
+    sed 's/\r*$/\r/' > dist/Liberador/Liberar-pessoal.ps1
+cp Liberar-pessoal.cmd dist/Liberador/
+(cd dist && python3 -I -m zipfile -c "Liberador-$versao.zip" Liberador)
+
 echo
 echo "pacote: dist/DiscordGoLiveBypass-$versao.zip"
+echo "kit de liberador: dist/Liberador-$versao.zip"
 echo "SHA256 do executavel, para mandar separado do zip:"
 echo "    $(cut -d' ' -f1 "$pacote/SHA256SUMS.txt")"

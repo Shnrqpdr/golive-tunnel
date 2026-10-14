@@ -1,22 +1,37 @@
-# Libera, lista ou corta o acesso de um amigo ao tunel WireGuard do servidor. So serve para
-# quem cuida do servidor: entra pelo apelido vps do ~/.ssh/config, com a chave de administrador.
+# Libera, lista ou corta o acesso de um amigo ao tunel WireGuard do servidor, e da ou tira a
+# permissao de liberador. So serve para quem cuida do servidor: entra pelo apelido vps do
+# ~/.ssh/config, com a chave de administrador.
 #
-# A chave e a linha "golive-wg ..." que o executavel mostra ao amigo na primeira vez.
+# A chave de amigo e a linha "golive-wg ..." que o executavel mostra na primeira vez; a de
+# liberador e a linha "golive-liberador ..." que o Liberar-pessoal.ps1 mostra na primeira vez.
 #
-# uso: .\Liberar-amigo.ps1 -Nome joao -Chave 'golive-wg AAAA...='
-#      .\Liberar-amigo.ps1 -Listar
-#      .\Liberar-amigo.ps1 -Remover joao
+# uso: .\Liberar-amigo.cmd -Nome joao -Chave 'golive-wg AAAA...='
+#      .\Liberar-amigo.cmd -Listar
+#      .\Liberar-amigo.cmd -Remover joao
+#      .\Liberar-amigo.cmd -Liberador maria -Chave 'golive-liberador ssh-ed25519 AAAA...' [-Limite 20]
+#      .\Liberar-amigo.cmd -TirarLiberador maria
+#      .\Liberar-amigo.cmd -Liberadores
 
 [CmdletBinding(DefaultParameterSetName = 'Liberar')]
 param(
     [Parameter(ParameterSetName = 'Liberar', Mandatory = $true)]
     [string]$Nome,
     [Parameter(ParameterSetName = 'Liberar', Mandatory = $true)]
+    [Parameter(ParameterSetName = 'DarLiberador', Mandatory = $true)]
     [string]$Chave,
     [Parameter(ParameterSetName = 'Listar', Mandatory = $true)]
     [switch]$Listar,
     [Parameter(ParameterSetName = 'Remover', Mandatory = $true)]
-    [string]$Remover
+    [string]$Remover,
+    [Parameter(ParameterSetName = 'DarLiberador', Mandatory = $true)]
+    [string]$Liberador,
+    [Parameter(ParameterSetName = 'DarLiberador')]
+    [ValidateRange(0, 9999)]
+    [int]$Limite = 20,
+    [Parameter(ParameterSetName = 'TirarLiberador', Mandatory = $true)]
+    [string]$TirarLiberador,
+    [Parameter(ParameterSetName = 'Liberadores', Mandatory = $true)]
+    [switch]$Liberadores
 )
 
 $ErrorActionPreference = 'Stop'
@@ -44,5 +59,19 @@ switch ($PSCmdlet.ParameterSetName) {
             throw "isso nao parece a linha que o programa mostrou: ela comeca com golive-wg"
         }
         ssh vps "golive-peer add $Nome $($Matches[1])"
+    }
+    'DarLiberador' {
+        Test-Nome $Liberador
+        if ($Chave.Trim() -notmatch '^(?:golive-liberador\s+)?ssh-ed25519\s+(AAAAC3NzaC1lZDI1NTE5[A-Za-z0-9+/]{48})(?:\s.*)?$') {
+            throw "isso nao parece a linha do Liberar-pessoal.ps1: ela comeca com golive-liberador ssh-ed25519"
+        }
+        ssh vps "golive-peer liberador-add $Liberador $($Matches[1]) $Limite"
+    }
+    'TirarLiberador' {
+        Test-Nome $TirarLiberador
+        ssh vps "golive-peer liberador-remove $TirarLiberador"
+    }
+    'Liberadores' {
+        ssh vps "golive-peer liberadores"
     }
 }
