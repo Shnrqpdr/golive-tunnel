@@ -1,0 +1,62 @@
+golive-tunnel: o Discord pelo meu servidor
+
+Abre o Discord saindo por um servidor meu fora do Brasil, o que devolve o Go Live, a camera
+e a transmissao de tela. So o Discord entra no tunel: navegador, jogos e o resto do PC
+continuam na sua internet normal.
+
+COMO USAR
+
+1. Coloque o golive-tunnel.exe numa pasta sua (nao rode de dentro do zip).
+2. Clique duas vezes nele (normal, NAO use "Executar como administrador").
+   Na primeira vez ele mostra uma linha que comeca com golive-wg e ja deixa ela
+   copiada: me mande. Nao e senha.
+3. Quando eu avisar que liberei, clique duas vezes de novo.
+   So nessa vez aparece o aviso de administrador do Windows: clique em Sim. E quando o
+   programa instala o WireSock, o componente que poe so o Discord no tunel.
+
+A partir dai e so clicar duas vezes, sem aviso nenhum. Se o Discord estiver aberto, ele
+e reaberto pelo tunel. A janela do programa fica minimizada enquanto voce usa o Discord:
+ela mantem o tunel e fecha sozinha quando o Discord fecha. Se voce fechar essa janela,
+o Discord perde a conexao ate voce abrir o programa de novo.
+
+Para ter um atalho: botao direito no .exe, "Mostrar mais opcoes", "Enviar para",
+"Area de trabalho (criar atalho)". Use ele no lugar do atalho normal do Discord.
+
+Quem transmite e quem assiste precisam estar no tunel. Se um dos dois abrir o Discord
+pelo atalho normal, o Go Live fica carregando para sempre.
+
+SE VOCE USAVA O DiscordGoLiveBypass.exe
+
+Ele foi renomeado para golive-tunnel.exe. Apague o antigo e use este: ele reaproveita a
+sua chave, entao nao precisa me mandar nada de novo. Na primeira vez o aviso de
+administrador aparece mais uma vez.
+
+O WINDOWS VAI RECLAMAR
+
+O programa nao tem assinatura digital, entao o Windows avisa. Em "Mais informacoes",
+"Executar assim mesmo". Antes, confira se o arquivo e o mesmo que eu compilei: no
+PowerShell, dentro da pasta, rode
+
+    Get-FileHash golive-tunnel.exe -Algorithm SHA256
+
+e compare com o SHA256SUMS.txt e com o que eu te mandei por mensagem.
+
+O QUE FICA INSTALADO
+
+O WireSock (wiresock.net), baixado do site oficial e conferido antes de instalar. Ele e
+gratuito para uso pessoal, de codigo fechado, e manda relatorios de falha para o servico
+Sentry quando trava; nao da para desligar isso na versao gratuita. Para tirar tudo:
+Configuracoes, Aplicativos, desinstalar "WireSock Secure Connect SDK".
+
+O QUE EU CONSIGO VER
+
+Todo o trafego do Discord passa pelo meu servidor, voz e video incluidos, mas cifrado:
+eu nao consigo ler mensagens, ouvir nem ver nada. Consigo ver o seu IP, os horarios em
+que voce usa e quanto trafego passa. A sua chave so serve para esse tunel, e eu posso
+cortar a qualquer hora.
+
+CODIGO-FONTE
+
+O programa e de codigo aberto, sob a licenca GPL-3.0 (arquivo LICENSE), e e uma versao
+modificada do projeto github.com/thomassolcia/DiscordGoLiveBypass. O codigo desta versao
+(__VERSION__) esta em github.com/Shnrqpdr/golive-tunnel.
