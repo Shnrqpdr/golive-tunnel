@@ -1,0 +1,36 @@
+# Firewall for the golive-tunnel WireGuard interface. Only traffic that comes in through wg0 is
+# filtered; the rest of the server does not go through these rules.
+#
+# install.sh replaces eth0 below with the server's internet-facing interface.
+define wan = "eth0"
+
+table inet golive
+delete table inet golive
+table inet golive {
+    # Ports Discord uses: HTTPS (plus Cloudflare's alternative ports, used by RTC) and the media
+    # UDP. Anything else, from e-mail to torrent, dies here.
+    set tcp_discord { type inet_service; flags interval; elements = { 443, 2053, 2083, 2087, 2096, 8443 } }
+    set udp_discord { type inet_service; flags interval; elements = { 443, 19294-19344, 50000-65535 } }
+    set private_nets { type ipv4_addr; flags interval; elements = { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/3 } }
+
+    chain forward {
+        type filter hook forward priority filter; policy accept;
+        iifname "wg0" oifname "wg0" drop comment "friends cannot reach each other"
+        iifname "wg0" ip daddr @private_nets drop
+        iifname "wg0" oifname $wan tcp dport @tcp_discord accept
+        iifname "wg0" oifname $wan udp dport @udp_discord accept
+        iifname "wg0" drop
+        oifname "wg0" ct state established,related accept
+        oifname "wg0" drop
+    }
+
+    chain input {
+        type filter hook input priority filter; policy accept;
+        iifname "wg0" drop comment "nobody reaches the server itself through the tunnel"
+    }
+
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        iifname "wg0" oifname $wan masquerade
+    }
+}

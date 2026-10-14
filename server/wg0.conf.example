@@ -1,0 +1,8 @@
+# golive-tunnel WireGuard interface. install.sh fills in the key and the port; friends are added
+# with golive-peer, never by hand.
+[Interface]
+Address = 10.66.0.1/16
+ListenPort = 51820
+PrivateKey = <generated on the server>
+PostUp = nft -f /etc/wireguard/golive.nft
+PostDown = nft delete table inet golive

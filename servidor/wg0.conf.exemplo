@@ -1,8 +1,0 @@
-# Tunel WireGuard do DiscordGoLiveBypass. Os amigos entram pelo golive-peer, nunca a mao.
-[Interface]
-Address = 10.66.0.1/16
-ListenPort = 51820
-PrivateKey = <gerada no servidor>
-PostUp = nft -f /etc/wireguard/golive.nft
-PostDown = nft delete table inet golive
-

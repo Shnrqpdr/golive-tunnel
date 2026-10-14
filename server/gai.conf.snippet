@@ -1,0 +1,5 @@
+
+# golive-tunnel: some providers announce IPv6 but do not route it, and netplan turns IPv6 back
+# on at every boot. Preferring IPv4 keeps anything on the server from hanging on IPv6 for
+# destinations that also have AAAA records (all of Cloudflare, for one). Append to /etc/gai.conf.
+precedence ::ffff:0:0/96  100

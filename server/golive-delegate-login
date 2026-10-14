@@ -1,0 +1,15 @@
+#!/bin/bash
+# Forced command of every delegate key, in the golive-delegate user's authorized_keys. The name
+# arrives as an argument, written by the owner on the key's line: whoever connects does not choose
+# who they are. What they asked for comes in SSH_ORIGINAL_COMMAND and only goes through if it is
+# add, remove or list, which golive-peer checks again.
+set -euo pipefail
+actor=${1:?}
+request=${SSH_ORIGINAL_COMMAND:-}
+
+# Plain words only: no quotes, semicolons, redirection, globs or expansion.
+[[ "$request" =~ ^[A-Za-z0-9_+/=\ -]{1,200}$ ]] || { echo "pedido recusado" >&2; exit 2; }
+read -r -a args <<< "$request"
+
+logger -t golive-delegate -- "$actor pediu: $request"
+exec sudo -n /usr/local/sbin/golive-peer as "$actor" "${args[@]}"
