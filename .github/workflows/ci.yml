@@ -14,11 +14,13 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      # No cache: there are no dependencies, so no go.sum for it to key on.
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          cache: false
 
       # One step per command: in a single step, the first failure would hide behind the last
       # command's success, because the shell returns the exit code of the last line.
@@ -35,11 +37,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      # No cache: there are no dependencies, so no go.sum for it to key on.
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          cache: false
 
       - name: gofmt
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
