@@ -44,6 +44,11 @@ function Show-Line {
 }
 
 if (-not (Test-Path -LiteralPath $sshKey)) {
+    # The OpenSSH client is an optional Windows feature; without it Start-Process fails with an
+    # error that means nothing to a friend.
+    if (-not (Get-Command ssh-keygen -ErrorAction SilentlyContinue)) {
+        throw 'falta o Cliente OpenSSH do Windows: Configuracoes > Sistema > Recursos opcionais > Adicionar um recurso > Cliente OpenSSH.'
+    }
     # The arguments go as a single string because PowerShell 5.1 drops empty arguments, and the
     # -N "" is precisely the empty passphrase. On the server the key only adds, lists and removes.
     $keygen = Start-Process ssh-keygen -ArgumentList "-q -t ed25519 -N `"`" -C golive-delegate -f `"$sshKey`"" -NoNewWindow -Wait -PassThru
