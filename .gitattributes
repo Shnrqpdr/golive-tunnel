@@ -1,6 +1,6 @@
 * text=auto eol=lf
 
-# Scripts do Windows precisam de CRLF: o cmd.exe engasga com .bat em LF.
+# Windows scripts need CRLF: cmd.exe chokes on .bat and .cmd in LF.
 *.bat text eol=crlf
 *.ps1 text eol=crlf
 *.cmd text eol=crlf

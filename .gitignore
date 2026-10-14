@@ -1,14 +1,14 @@
-# Os executaveis saem do compilar-amigos.sh, nao vao para o git.
+# Executables come out of scripts/build.sh; they carry the server address and stay out of git.
 *.exe
 
-# Servidor do tunel e pacotes gerados: ficam so na maquina de quem compila.
+# Server settings and generated packages stay on the machine that builds.
 .env
 dist/
 
-# Restos do Windows
+# Windows leftovers
 Thumbs.db
 desktop.ini
 
-# Configuracao de IDE: e da maquina de quem edita, nao do projeto.
+# Editor settings belong to whoever edits, not to the project.
 .idea/
 .vscode/

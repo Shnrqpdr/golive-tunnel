@@ -1,7 +1,7 @@
 name: ci
 
-# Confere a cada mudança, num Windows de verdade: um teste quebrado aparece aqui, e não no
-# computador de um amigo depois que o pacote já foi mandado.
+# Checks every change on a real Windows: a broken test shows up here, and not on a friend's
+# computer after the package was already sent.
 on:
   push:
     branches:
@@ -20,13 +20,35 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # Um passo por comando: num passo só, a falha do primeiro sumiria atrás do sucesso do
-      # último, porque o shell devolve o código de saída da última linha.
-      - name: Analisar
+      # One step per command: in a single step, the first failure would hide behind the last
+      # command's success, because the shell returns the exit code of the last line.
+      - name: Vet
         run: go vet ./...
 
-      - name: Testar
+      - name: Test
         run: go test ./...
 
-      - name: Compilar
+      - name: Build
         run: go build ./...
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+
+      - name: Vet for Windows
+        run: GOOS=windows go vet ./...
+
+      - name: Portable tests
+        run: go test ./...
+
+      - name: shellcheck
+        run: shellcheck server/install.sh server/golive-peer server/golive-delegate-login scripts/build.sh
