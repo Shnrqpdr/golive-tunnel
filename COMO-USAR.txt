@@ -1,0 +1,53 @@
+DiscordGoLiveBypass, versão com túnel pelo meu servidor
+
+Abre o Discord saindo por um servidor meu nos Estados Unidos, o que devolve o Go Live,
+a câmera e a transmissão de tela. Só o Discord entra no túnel: navegador, jogos e o
+resto do PC continuam na sua internet normal.
+
+COMO USAR
+
+1. Coloque o DiscordGoLiveBypass.exe numa pasta sua (não rode de dentro do zip).
+2. Clique duas vezes nele (normal, NÃO use "Executar como administrador").
+   Na primeira vez ele mostra uma linha que começa com golive-wg e já deixa ela
+   copiada: me mande. Não é senha.
+3. Quando eu avisar que liberei, clique duas vezes de novo.
+   Só nessa vez aparece o aviso de administrador do Windows: clique em Sim. É quando o
+   programa instala o WireSock, o componente que põe só o Discord no túnel.
+
+A partir daí é só clicar duas vezes, sem aviso nenhum. Se o Discord estiver aberto, ele
+é reaberto pelo túnel. A janela do programa fica minimizada enquanto você usa o Discord:
+ela mantém o túnel e fecha sozinha quando o Discord fecha. Se você fechar essa janela,
+o Discord perde a conexão até você abrir o programa de novo.
+
+Para ter um atalho: botão direito no .exe, "Mostrar mais opções", "Enviar para",
+"Área de trabalho (criar atalho)". Use ele no lugar do atalho normal do Discord.
+
+O WINDOWS VAI RECLAMAR
+
+O programa não tem assinatura digital, então o Windows avisa. Em "Mais informações",
+"Executar assim mesmo". Antes, confira se o arquivo é o mesmo que eu compilei: no
+PowerShell, dentro da pasta, rode
+
+    Get-FileHash DiscordGoLiveBypass.exe -Algorithm SHA256
+
+e compare com o SHA256SUMS.txt e com o que eu te mandei por mensagem.
+
+O QUE FICA INSTALADO
+
+O WireSock (wiresock.net), baixado do site oficial e conferido antes de instalar. Ele é
+gratuito para uso pessoal, de código fechado, e manda relatórios de falha para o serviço
+Sentry quando trava; não dá para desligar isso na versão gratuita. Para tirar tudo:
+Configurações, Aplicativos, desinstalar "WireSock Secure Connect SDK".
+
+O QUE EU CONSIGO VER
+
+Todo o tráfego do Discord passa pelo meu servidor, voz e vídeo incluídos, mas cifrado:
+eu não consigo ler mensagens, ouvir nem ver nada. Consigo ver o seu IP, os horários em
+que você usa e quanto tráfego passa. A sua chave só serve para esse túnel, e eu posso
+cortar a qualquer hora.
+
+CÓDIGO-FONTE
+
+O programa é de código aberto, sob a licença GPL-3.0 (arquivo LICENSE), e é uma
+versão modificada do projeto github.com/thomassolcia/DiscordGoLiveBypass. Se o
+código-fonte não veio junto, é só me pedir.

@@ -1,0 +1,73 @@
+#!/bin/bash
+# Acessos WireGuard do tunel do DiscordGoLiveBypass. Cada amigo e um bloco [Peer] no
+# wg0.conf com o nome num comentario, para o list e o remove acharem.
+#
+# uso: golive-peer add <nome> <chave-publica>
+#      golive-peer remove <nome>
+#      golive-peer list
+set -euo pipefail
+CONF=/etc/wireguard/wg0.conf
+IFACE=wg0
+
+# O nome e a chave chegam de mensagem de terceiros e viram linha de configuracao do root.
+valida_nome() { [[ "$1" =~ ^[A-Za-z0-9_-]{1,32}$ ]] || { echo "nome invalido: use letras sem acento, numeros, - e _, ate 32" >&2; exit 2; }; }
+valida_chave() { [[ "$1" =~ ^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$ ]] || { echo "chave invalida: nao e uma chave publica WireGuard" >&2; exit 2; }; }
+
+# O executavel faz a mesma conta: o endereco sai da propria chave, e ninguem precisa
+# combinar IP. Fica em 10.66.1-254.1-254, longe do 10.66.0.1 do servidor.
+ip_da_chave() {
+    local h
+    h=$(printf '%s' "$1" | base64 -d | sha256sum | cut -c1-4)
+    echo "10.66.$(( 0x${h:0:2} % 254 + 1 )).$(( 0x${h:2:2} % 254 + 1 ))"
+}
+
+# Imprime "nome chave ip" de cada amigo do wg0.conf.
+amigos() {
+    awk '/^\[Peer\]/ { n=""; k=""; a="" }
+         /^# nome: / { n=$3 }
+         /^PublicKey = / { k=$3 }
+         /^AllowedIPs = / { a=$3; sub("/32", "", a); if (n != "") print n, k, a }' "$CONF"
+}
+
+case "${1:-}" in
+add)
+    [ $# -eq 3 ] || { echo "uso: golive-peer add <nome> <chave-publica>" >&2; exit 2; }
+    nome=$2; chave=$3
+    valida_nome "$nome"; valida_chave "$chave"
+    if amigos | awk -v k="$chave" '$2 == k { f=1 } END { exit !f }'; then echo "essa chave ja esta liberada"; exit 0; fi
+    if amigos | awk -v n="$nome" '$1 == n { f=1 } END { exit !f }'; then echo "ja existe alguem chamado $nome, escolha outro nome" >&2; exit 1; fi
+    ip=$(ip_da_chave "$chave")
+    if amigos | awk -v i="$ip" '$3 == i { f=1 } END { exit !f }'; then echo "o endereco $ip dessa chave ja e de outra pessoa: peca para gerar outra chave" >&2; exit 1; fi
+    printf '\n[Peer]\n# nome: %s\nPublicKey = %s\nAllowedIPs = %s/32\n' "$nome" "$chave" "$ip" >> "$CONF"
+    wg set "$IFACE" peer "$chave" allowed-ips "$ip/32"
+    echo "liberado: $nome ($ip)"
+    ;;
+remove)
+    [ $# -eq 2 ] || { echo "uso: golive-peer remove <nome>" >&2; exit 2; }
+    nome=$2; valida_nome "$nome"
+    chave=$(amigos | awk -v n="$nome" '$1 == n { print $2 }')
+    [ -n "$chave" ] || { echo "nenhum acesso com o nome $nome" >&2; exit 1; }
+    tmp=$(mktemp /etc/wireguard/.wg0.XXXXXX)
+    # Corta o bloco [Peer] inteiro do nome, junto com a linha em branco que o abria.
+    awk -v n="$nome" '
+        /^\[Peer\]/ { if (bloco != "" && !corta) printf "%s", bloco; bloco=""; corta=0; dentro=1 }
+        dentro { bloco = bloco $0 "\n"; if ($0 == "# nome: " n) corta=1; next }
+        { print }
+        END { if (bloco != "" && !corta) printf "%s", bloco }' "$CONF" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$tmp"
+    chmod 600 "$tmp"; mv "$tmp" "$CONF"
+    wg set "$IFACE" peer "$chave" remove
+    echo "cortado: $nome"
+    ;;
+list)
+    declare -A visto
+    while read -r k t; do visto[$k]=$t; done < <(wg show "$IFACE" latest-handshakes)
+    amigos | while read -r n k i; do
+        t=${visto[$k]:-0}
+        if [ "$t" = 0 ]; then quando="nunca conectou"; else quando="ultimo contato $(date -d "@$t" '+%d/%m %H:%M')"; fi
+        printf '%-20s %-15s %s\n' "$n" "$i" "$quando"
+    done
+    ;;
+*)
+    echo "uso: golive-peer add <nome> <chave-publica> | remove <nome> | list" >&2; exit 2
+    ;;
+esac

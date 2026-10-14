@@ -1,0 +1,5 @@
+
+# Tunel do DiscordGoLiveBypass: o provedor anuncia IPv6, mas o trafego IPv6 nao sai, e o
+# netplan religa o IPv6 a cada boot. Preferindo IPv4, nada no servidor pendura tentando IPv6
+# em destino que tambem tem AAAA (o Cloudflare inteiro, por exemplo).
+precedence ::ffff:0:0/96  100
