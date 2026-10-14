@@ -1,6 +1,6 @@
 //go:build windows
 
-package main
+package ui
 
 import (
 	"os"
@@ -25,26 +25,27 @@ const (
 	swMinimize            = 6
 )
 
-// Duplo clique no Explorer cria um console só para este processo; pelo cmd ou por um script ele é
-// compartilhado. Só no primeiro caso a janela some no fim e só nele dá para minimizá-la sem
-// mexer no terminal de ninguém.
-func ownsConsole() bool {
+// OwnsConsole reports whether the console window belongs to this process alone. A double click
+// in Explorer creates a console just for it; from cmd or a script the console is shared. Only in
+// the first case the window disappears at the end, and only then can it be minimized without
+// touching anyone else's terminal.
+func OwnsConsole() bool {
 	var pids [2]uint32
 	n, _, _ := procGetConsoleProcessList.Call(uintptr(unsafe.Pointer(&pids[0])), uintptr(len(pids)))
 	return n == 1
 }
 
-func minimizeConsole() {
+func MinimizeConsole() {
 	if hwnd, _, _ := procGetConsoleWindow.Call(); hwnd != 0 {
 		procShowWindow.Call(hwnd, swMinimize)
 	}
 }
 
-// O console do Windows nasce sem interpretar ANSI e numa codepage antiga. Os dois
-// precisam ser ligados na mao, e o que falhar apenas rebaixa a aparencia: quem nao
-// consegue ANSI cai para linhas simples, quem nao consegue UTF-8 cai para ASCII.
+// The Windows console starts without ANSI and on an old code page. Both have to be turned on by
+// hand, and whatever fails only downgrades the looks: without ANSI the output falls back to
+// plain lines, without UTF-8 to ASCII.
 func prepareConsole(f *os.File) (ansi bool, wide bool) {
-	if !charDevice(f) {
+	if !IsTerminal(f) {
 		return false, false
 	}
 

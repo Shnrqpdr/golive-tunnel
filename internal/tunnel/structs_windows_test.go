@@ -1,17 +1,17 @@
 //go:build windows
 
-package main
+package tunnel
 
 import (
 	"testing"
 	"unsafe"
 )
 
-// Tamanho errado aqui faz a chamada ao Windows falhar ou ler lixo sem erro aparente.
-func TestEstruturasDoWindows(t *testing.T) {
+// A wrong size here makes the Windows call fail, or read garbage with no visible error.
+func TestWindowsStructSizes(t *testing.T) {
 	ptr := unsafe.Sizeof(uintptr(0))
 	cases := []struct {
-		nome     string
+		name     string
 		got      uintptr
 		x64, x86 uintptr
 	}{
@@ -25,7 +25,7 @@ func TestEstruturasDoWindows(t *testing.T) {
 			want = c.x86
 		}
 		if c.got != want {
-			t.Errorf("%s com %d bytes, o Windows espera %d", c.nome, c.got, want)
+			t.Errorf("%s has %d bytes, Windows expects %d", c.name, c.got, want)
 		}
 	}
 }

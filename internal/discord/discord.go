@@ -1,16 +1,18 @@
-package main
+// Package discord finds the Discord installation and starts, checks and stops it.
+package discord
 
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/Shnrqpdr/golive-tunnel/internal/process"
 )
 
+// Channel is one Discord release channel: its folder under %LOCALAPPDATA% and its executable.
 type Channel struct {
 	Key      string
 	Folder   string
@@ -34,11 +36,12 @@ func LookupChannel(key string) (Channel, error) {
 	return channel, nil
 }
 
+// DetectChannel returns the first installed channel, in the order stable, ptb, canary.
 func DetectChannel() (Channel, string, error) {
 	var checked []string
 	for _, key := range channelOrder {
 		channel := channels[key]
-		binary, err := LocateDiscord(channel)
+		binary, err := Locate(channel)
 		if err == nil {
 			return channel, binary, nil
 		}
@@ -48,6 +51,7 @@ func DetectChannel() (Channel, string, error) {
 	return Channel{}, "", fmt.Errorf("nao achei nenhum Discord instalado. Procurei por %s dentro de %%LOCALAPPDATA%%. Se o seu esta em outro lugar, aponte com -exe", strings.Join(checked, ", "))
 }
 
+// ChannelForBinary names the channel of an executable passed by hand, or a "custom" one.
 func ChannelForBinary(binary string) Channel {
 	name := filepath.Base(binary)
 	for _, key := range channelOrder {
@@ -58,8 +62,8 @@ func ChannelForBinary(binary string) Channel {
 	return Channel{Key: "custom", Binary: name, Friendly: name}
 }
 
-// Ordenar as pastas como texto colocaria app-1.0.998 na frente de app-1.0.9184, e o
-// launcher abriria uma versão que o updater já aposentou.
+// Sorting the folders as text would put app-1.0.998 ahead of app-1.0.9184, and the launcher
+// would open a version the updater already retired.
 func versionOf(name string) []int {
 	raw := strings.TrimPrefix(name, "app-")
 	var parts []int
@@ -82,9 +86,9 @@ func newerThan(a, b []int) bool {
 	return len(a) > len(b)
 }
 
-// Aponta para o Discord.exe dentro de app-<versão>, e não para o Update.exe da raiz, porque
-// só o binário final aceita as flags do Chromium.
-func LocateDiscord(channel Channel) (string, error) {
+// Locate points to the Discord.exe inside the newest complete app-<version> folder, not to the
+// Update.exe at the root, so the process started (and the pid reported) is Discord itself.
+func Locate(channel Channel) (string, error) {
 	local := os.Getenv("LOCALAPPDATA")
 	if local == "" {
 		return "", fmt.Errorf("LOCALAPPDATA nao esta definido, informe o caminho com -exe")
@@ -132,9 +136,9 @@ func LocateDiscord(channel Channel) (string, error) {
 	return "", fmt.Errorf("achei %s em %s, mas nenhuma versao esta completa. Isso e update interrompido: abra o %s normalmente uma vez, deixe ele terminar de se atualizar e rode de novo", channel.Binary, root, channel.Friendly)
 }
 
-// Update interrompido deixa a pasta da versão nova com o executável, mas sem os arquivos que
-// o Chromium precisa para subir. O processo nasce e morre sozinho, então a pasta mais nova
-// não serve só por ser a mais nova.
+// An interrupted update leaves the new version folder with the executable but without the files
+// Chromium needs to start. The process is born and dies on its own, so the newest folder is not
+// good just for being the newest.
 var runtimeFiles = []string{"icudtl.dat", "resources.pak", "locales"}
 
 func complete(dir string) bool {
@@ -146,60 +150,16 @@ func complete(dir string) bool {
 	return true
 }
 
-// O Discord é instância única: subir um segundo processo com as flags só acorda a janela do
-// primeiro, que continua no IP de casa.
+// IsRunning matters because Discord is single instance: a second process only wakes the window
+// of the first one, which keeps going out through the old route.
 func IsRunning(channel Channel) (bool, error) {
-	if runtime.GOOS != "windows" {
-		return false, fmt.Errorf("checagem de processo so implementada no Windows")
-	}
-
-	out, err := exec.Command("tasklist", "/FI", "IMAGENAME eq "+channel.Binary, "/NH", "/FO", "CSV").Output()
-	if err != nil {
-		return false, err
-	}
-	return strings.Contains(strings.ToLower(string(out)), strings.ToLower(channel.Binary)), nil
+	return process.Running(channel.Binary)
 }
 
 func Terminate(channel Channel) error {
-	if runtime.GOOS != "windows" {
-		return fmt.Errorf("encerrar processo so implementado no Windows")
-	}
-
-	out, err := exec.Command("taskkill", "/IM", channel.Binary, "/F", "/T").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("taskkill falhou: %v: %s", err, strings.TrimSpace(string(out)))
-	}
-	return nil
-}
-
-// O direct:// no fim é a válvula de escape do Chromium: salva a sessão quando o proxy cai,
-// ao preço de o bypass sumir sem avisar.
-func ProxyArgs(e Endpoint, bypass string, fallbackDirect bool) []string {
-	rules := e.String()
-	if fallbackDirect {
-		rules += ",direct://"
-	}
-
-	return []string{
-		fmt.Sprintf("--proxy-server=%s", rules),
-		fmt.Sprintf("--proxy-bypass-list=%s", bypass),
-	}
+	return process.Kill(channel.Binary)
 }
 
 func Launch(binary string, args []string) (int, error) {
-	cmd := exec.Command(binary, args...)
-	cmd.Dir = filepath.Dir(binary)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-
-	if err := cmd.Start(); err != nil {
-		return 0, err
-	}
-
-	pid := cmd.Process.Pid
-	// Solta o handle: o Discord segue vivo depois que o launcher sai.
-	if err := cmd.Process.Release(); err != nil {
-		return pid, err
-	}
-	return pid, nil
+	return process.Start(binary, args)
 }

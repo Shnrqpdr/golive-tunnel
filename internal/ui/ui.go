@@ -1,16 +1,16 @@
-package main
+// Package ui draws the console output: numbered steps, status lines, a spinner and boxes.
+package ui
 
 import (
 	"fmt"
 	"os"
-	"os/signal"
 	"strings"
 	"sync"
 	"time"
 )
 
-// Sequencias ANSI. So saem quando o console aceita: em terminal antigo ou com a saida
-// redirecionada elas virariam lixo no meio do texto.
+// ANSI sequences. They only go out when the console accepts them: on an old terminal or with
+// the output redirected they would turn into garbage in the middle of the text.
 const (
 	cReset  = "\x1b[0m"
 	cBold   = "\x1b[1m"
@@ -26,32 +26,27 @@ const (
 )
 
 type glyphs struct {
-	ok, fail, warn, info, step string
-	barFull, barEmpty          string
-	tl, tr, bl, br, h, v       string
-	spinner                    []string
+	ok, warn, info, step string
+	tl, tr, bl, br, h, v string
+	spinner              []string
 }
 
 var wideGlyphs = glyphs{
-	ok: "✔", fail: "✘", warn: "▲", info: "•", step: "▸",
-	barFull: "█", barEmpty: "░",
+	ok: "✔", warn: "▲", info: "•", step: "▸",
 	tl: "╭", tr: "╮", bl: "╰", br: "╯", h: "─", v: "│",
 	spinner: []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
 }
 
 var plainGlyphs = glyphs{
-	ok: "+", fail: "x", warn: "!", info: "-", step: ">",
-	barFull: "#", barEmpty: ".",
+	ok: "+", warn: "!", info: "-", step: ">",
 	tl: "+", tr: "+", bl: "+", br: "+", h: "-", v: "|",
 	spinner: []string{"|", "/", "-", "\\"},
 }
 
-const barWidth = 24
-
 type UI struct {
 	mu      sync.Mutex
 	out     *os.File
-	rich    bool // aceita cor e reescrita de linha
+	rich    bool // accepts color and line rewriting
 	g       glyphs
 	total   int
 	step    int
@@ -61,9 +56,9 @@ type UI struct {
 	started time.Time
 }
 
-func NewUI() *UI {
+func New() *UI {
 	ansi, wide := prepareConsole(os.Stdout)
-	// Convencao do no-color.org: quem exporta a variavel quer texto puro em tudo.
+	// no-color.org convention: whoever exports the variable wants plain text everywhere.
 	if os.Getenv("NO_COLOR") != "" {
 		ansi, wide = false, false
 	}
@@ -72,26 +67,10 @@ func NewUI() *UI {
 	if wide {
 		u.g = wideGlyphs
 	}
-	u.trapInterrupt()
 	return u
 }
 
-// Sem isso um Ctrl+C no meio da busca deixaria o cursor escondido depois que o programa sai.
-func (u *UI) trapInterrupt() {
-	if !u.rich {
-		return
-	}
-
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt)
-	go func() {
-		<-signals
-		u.Close()
-		fmt.Fprintln(u.out, "\n  cancelado")
-		os.Exit(130)
-	}()
-}
-
+// Plan sets how many steps the counter in front of each Step shows.
 func (u *UI) Plan(total int) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
@@ -105,7 +84,7 @@ func (u *UI) paint(code, text string) string {
 	return code + text + cReset
 }
 
-// TryLock de proposito: o spinner nunca pode segurar quem esta imprimindo de verdade.
+// TryLock on purpose: the spinner must never hold up whoever is printing for real.
 func (u *UI) animate() {
 	ticker := time.NewTicker(90 * time.Millisecond)
 	defer ticker.Stop()
@@ -134,9 +113,6 @@ func (u *UI) drawLive() {
 }
 
 func (u *UI) setLive(text string) {
-	if !u.rich {
-		return
-	}
 	if u.spinner == nil {
 		u.spinner = make(chan struct{})
 		fmt.Fprint(u.out, hideCursor)
@@ -181,10 +157,6 @@ func (u *UI) Warn(format string, args ...any) {
 	u.entry(u.g.warn, cYellow, fmt.Sprintf(format, args...))
 }
 
-func (u *UI) Fail(format string, args ...any) {
-	u.entry(u.g.fail, cRed, fmt.Sprintf(format, args...))
-}
-
 func (u *UI) Info(format string, args ...any) {
 	u.entry(u.g.info, cCyan, fmt.Sprintf(format, args...))
 }
@@ -196,53 +168,24 @@ func (u *UI) Detail(format string, args ...any) {
 	fmt.Fprintf(u.out, "      %s\n", u.paint(cDim, fmt.Sprintf(format, args...)))
 }
 
+// Busy shows what is happening right now; the next line printed replaces it.
 func (u *UI) Busy(format string, args ...any) {
 	text := fmt.Sprintf(format, args...)
 
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	if !u.rich {
-		u.clearLive()
 		fmt.Fprintf(u.out, "   %s  %s\n", u.g.info, text)
 		return
 	}
 	u.setLive(u.paint(cDim, text))
 }
 
-// Chamada de varias goroutines ao mesmo tempo enquanto as candidatas sao testadas.
-func (u *UI) Progress(done, total int, format string, args ...any) {
-	if total <= 0 {
-		return
-	}
-	if done > total {
-		done = total
-	}
-
-	u.mu.Lock()
-	defer u.mu.Unlock()
-
-	if !u.rich {
-		// Sem reescrita de linha, uma linha por lote ja basta para nao virar spam.
-		if done == 0 || (done != total && done%parallelProbes != 0) {
-			return
-		}
-		fmt.Fprintf(u.out, "   %s  %d/%d testadas, %s\n", u.g.info, done, total, fmt.Sprintf(format, args...))
-		return
-	}
-
-	filled := barWidth * done / total
-	bar := strings.Repeat(u.g.barFull, filled) + strings.Repeat(u.g.barEmpty, barWidth-filled)
-	u.setLive(fmt.Sprintf("%s  %s  %s",
-		u.paint(cCyan, bar),
-		fmt.Sprintf("%d/%d", done, total),
-		u.paint(cDim, fmt.Sprintf(format, args...))))
-}
-
 func runeLen(s string) int {
 	return len([]rune(s))
 }
 
-// As larguras saem do texto cru: medir depois de colorir contaria os codigos ANSI.
+// Widths come from the raw text: measuring after coloring would count the ANSI codes.
 func (u *UI) box(border, title string, rows [][2]string) {
 	labels := 0
 	for _, row := range rows {
@@ -283,23 +226,33 @@ func (u *UI) box(border, title string, rows [][2]string) {
 	fmt.Fprintf(u.out, " %s\n", u.paint(border, g.bl+strings.Repeat(g.h, inner)+g.br))
 }
 
-func (u *UI) Banner() {
-	nome := "DiscordGoLiveBypass"
-	if version != "dev" {
-		nome += " " + version
+func (u *UI) Banner(version string) {
+	name := "golive-tunnel"
+	if version != "" && version != "dev" {
+		name += " " + version
 	}
 
 	u.box(cCyan, "", [][2]string{
-		{"", nome},
-		{"", "abre o Discord por um IP de fora, sem VPN no sistema"},
+		{"", name},
+		{"", "abre o Discord por um tunel WireGuard ate o seu servidor"},
 	})
 }
 
-func (u *UI) Summary(title string, rows [][2]string) {
-	u.box(cGreen, title, append(rows, [2]string{"tempo", u.Elapsed()}))
+// Notice is a yellow box for something the person has to act on.
+func (u *UI) Notice(title string, lines []string) {
+	rows := make([][2]string, 0, len(lines))
+	for _, line := range lines {
+		rows = append(rows, [2]string{"", line})
+	}
+	u.box(cYellow, title, rows)
 }
 
-func (u *UI) Elapsed() string {
+// Summary is the green box at the end, with label/value rows plus the elapsed time.
+func (u *UI) Summary(title string, rows [][2]string) {
+	u.box(cGreen, title, append(rows, [2]string{"tempo", u.elapsed()}))
+}
+
+func (u *UI) elapsed() string {
 	elapsed := time.Since(u.started).Round(time.Second)
 	if elapsed < time.Minute {
 		return fmt.Sprintf("%ds", int(elapsed.Seconds()))
@@ -307,7 +260,7 @@ func (u *UI) Elapsed() string {
 	return fmt.Sprintf("%dmin %ds", int(elapsed.Minutes()), int(elapsed.Seconds())%60)
 }
 
-// Quebra por palavra: uma mensagem de erro longa dentro da caixa estouraria a largura.
+// Word wrap: a long error message inside the box would break its width.
 func wrap(text string, width int) []string {
 	var lines []string
 	current := ""
@@ -332,6 +285,8 @@ func wrap(text string, width int) []string {
 	return lines
 }
 
+// Fatal shows the error in a red box. Whoever runs the executable has neither the README nor the
+// code: help comes from whoever handed them the program, so the footer says to send it there.
 func (u *UI) Fatal(err error) {
 	u.Close()
 
@@ -341,12 +296,14 @@ func (u *UI) Fatal(err error) {
 	}
 	rows = append(rows,
 		[2]string{"", ""},
-		[2]string{"", rodapeErro()})
+		[2]string{"", "se nao resolver, mande esta mensagem para quem te passou o programa"})
 
 	u.box(cRed, "nao deu certo", rows)
 	fmt.Fprintln(u.out)
 }
 
+// Close stops the spinner and gives the cursor back. Without it, leaving in the middle of a
+// Busy line would keep the cursor hidden after the program exits.
 func (u *UI) Close() {
 	u.mu.Lock()
 	defer u.mu.Unlock()
@@ -361,37 +318,10 @@ func (u *UI) Close() {
 	}
 }
 
-// O codigo ISO sozinho nao diz nada para quem so quer saber se saiu do Brasil.
-var countryNames = map[string]string{
-	"AR": "Argentina", "AT": "Austria", "AU": "Australia", "BE": "Belgica",
-	"BG": "Bulgaria", "BR": "Brasil", "CA": "Canada", "CH": "Suica",
-	"CL": "Chile", "CN": "China", "CO": "Colombia", "CZ": "Tchequia",
-	"DE": "Alemanha", "DK": "Dinamarca", "EE": "Estonia", "ES": "Espanha",
-	"FI": "Finlandia", "FR": "Franca", "GB": "Reino Unido", "GR": "Grecia",
-	"HK": "Hong Kong", "HU": "Hungria", "ID": "Indonesia", "IE": "Irlanda",
-	"IL": "Israel", "IN": "India", "IT": "Italia", "JP": "Japao",
-	"KR": "Coreia do Sul", "LT": "Lituania", "LU": "Luxemburgo", "LV": "Letonia",
-	"MD": "Moldavia", "MX": "Mexico", "MY": "Malasia", "NL": "Holanda",
-	"NO": "Noruega", "NZ": "Nova Zelandia", "PE": "Peru", "PH": "Filipinas",
-	"PL": "Polonia", "PT": "Portugal", "PY": "Paraguai", "RO": "Romenia",
-	"RS": "Servia", "RU": "Russia", "SE": "Suecia", "SG": "Singapura",
-	"SK": "Eslovaquia", "TH": "Tailandia", "TR": "Turquia", "TW": "Taiwan",
-	"UA": "Ucrania", "US": "Estados Unidos", "UY": "Uruguai", "VN": "Vietna",
-	"ZA": "Africa do Sul",
-}
-
-func CountryLabel(code string) string {
-	if name, ok := countryNames[strings.ToUpper(code)]; ok {
-		return fmt.Sprintf("%s (%s)", name, strings.ToUpper(code))
-	}
-	return strings.ToUpper(code)
-}
-
-// Quem recebe o executavel com servidor embutido nao tem o README nem o codigo: a ajuda vem de
-// quem passou o programa, e a mensagem da caixa e o que essa pessoa precisa ver.
-func rodapeErro() string {
-	if TunelEmbutido() {
-		return "se nao resolver, mande esta mensagem para quem te passou o programa"
-	}
-	return "o FAQ do README tem uma entrada para cada mensagem dessas"
+// Print writes a plain line, outside any box or step.
+func (u *UI) Print(text string) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.clearLive()
+	fmt.Fprintln(u.out, text)
 }
