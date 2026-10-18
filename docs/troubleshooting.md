@@ -37,3 +37,5 @@ O programa achou a chave do antigo `DiscordGoLiveBypass.exe` mas não conseguiu 
 ### "o tunel funciona, mas a saida nao serve"
 
 O túnel funciona, mas o país de saída está na lista de recusados. O servidor está no Brasil, ou o serviço de geolocalização errou o país; use um servidor fora do Brasil.
+
+Se a mensagem terminar em `context deadline exceeded`, nenhum dos serviços de geolocalização (`ifconfig.co`, `api.country.is`, `ipinfo.io`) respondeu a tempo pelo túnel. O Discord já respondeu, então a chave foi aceita; confira a saída de internet do servidor (DNS e HTTPS) e tente de novo.

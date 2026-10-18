@@ -15,7 +15,6 @@ import (
 
 const (
 	discordURL = "https://discord.com/api/v9/gateway"
-	geoURL     = "https://ifconfig.co/json"
 
 	// Timeout is how long a single check may take before it counts as failed.
 	Timeout = 6 * time.Second
@@ -65,9 +64,29 @@ func Probe(timeout time.Duration) (time.Duration, error) {
 	return time.Since(started), nil
 }
 
+// geoSources are tried in order: a free geolocation service that is slow or rate limited must
+// not fail a tunnel that already proved itself with Discord's 200.
+var geoSources = []struct{ url, field string }{
+	{"https://ifconfig.co/json", "country_iso"},
+	{"https://api.country.is", "country"},
+	{"https://ipinfo.io/json", "country"},
+}
+
 // ExitCountry returns the ISO code of the country this process appears to come from.
 func ExitCountry(timeout time.Duration) (string, error) {
-	res, err := get(geoURL, timeout)
+	var errs []error
+	for _, source := range geoSources {
+		country, err := countryFrom(source.url, source.field, timeout)
+		if err == nil {
+			return country, nil
+		}
+		errs = append(errs, err)
+	}
+	return "", errors.Join(errs...)
+}
+
+func countryFrom(url, field string, timeout time.Duration) (string, error) {
+	res, err := get(url, timeout)
 	if err != nil {
 		return "", err
 	}
@@ -76,17 +95,19 @@ func ExitCountry(timeout time.Duration) (string, error) {
 	if res.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("o servico de geolocalizacao respondeu %s", res.Status)
 	}
-	return countryFromJSON(io.LimitReader(res.Body, maxResponseBytes))
+	return countryFromJSON(io.LimitReader(res.Body, maxResponseBytes), field)
 }
 
-func countryFromJSON(r io.Reader) (string, error) {
-	var payload struct {
-		CountryISO string `json:"country_iso"`
-	}
-	if err := json.NewDecoder(r).Decode(&payload); err != nil || !isCountryCode(strings.ToUpper(payload.CountryISO)) {
+func countryFromJSON(r io.Reader, field string) (string, error) {
+	var payload map[string]any
+	if err := json.NewDecoder(r).Decode(&payload); err != nil {
 		return "", errors.New("nao achei o pais na resposta do servico de geolocalizacao")
 	}
-	return strings.ToUpper(payload.CountryISO), nil
+	code, _ := payload[field].(string)
+	if code = strings.ToUpper(code); !isCountryCode(code) {
+		return "", errors.New("nao achei o pais na resposta do servico de geolocalizacao")
+	}
+	return code, nil
 }
 
 // Accepts returns the exit country, with an error when it is one of the refused ones.
