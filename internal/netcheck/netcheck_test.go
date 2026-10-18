@@ -29,13 +29,13 @@ func TestParseCountries(t *testing.T) {
 }
 
 func TestCountryFromJSON(t *testing.T) {
-	got, err := countryFromJSON(strings.NewReader(`{"ip":"203.0.113.10","country":"United States","country_iso":"us"}`))
+	got, err := countryFromJSON(strings.NewReader(`{"ip":"203.0.113.10","country":"United States","country_iso":"us"}`), "country_iso")
 	if err != nil || got != "US" {
 		t.Errorf("countryFromJSON = %q, %v; want US", got, err)
 	}
 
 	for _, body := range []string{`{"ip":"203.0.113.10"}`, `{"country_iso":"USA"}`, `<html>`} {
-		if got, err := countryFromJSON(strings.NewReader(body)); err == nil {
+		if got, err := countryFromJSON(strings.NewReader(body), "country_iso"); err == nil {
 			t.Errorf("countryFromJSON(%s) = %q, want error", body, got)
 		}
 	}
